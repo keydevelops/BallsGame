@@ -33,11 +33,25 @@ class ThrownBall:
             if self.y >= screen_height - self.radius:
                 self.y = screen_height - self.radius
                 self.speed *= -0.8
-            if self.x <= left_boundary + self.radius or self.x >= right_boundary - self.radius:
+            if self.x <= left_boundary + self.radius:
+                self.x = left_boundary + self.radius
+                self.angle = math.pi - self.angle
+            if self.x >= right_boundary - self.radius:
+                self.x = right_boundary - self.radius
                 self.angle = math.pi - self.angle
             if self.y <= top_boundary + self.radius:
                 self.y = top_boundary + self.radius
                 self.speed *= -0.8
+        
+        if collision_enabled:
+            for ball in balls:
+                if ball != self:
+                    distance = math.sqrt((self.x - ball.x)**2 + (self.y - ball.y)**2)
+                    if distance <= self.radius + ball.radius:
+                        angle_between = math.atan2(ball.y - self.y, ball.x - self.x)
+                        overlap = self.radius + ball.radius - distance
+                        self.x -= math.cos(angle_between) * overlap * 0.5
+                        self.y -= math.sin(angle_between) * overlap * 0.5
         
         if collision_enabled:
             for ball in balls:
@@ -76,11 +90,11 @@ def input_gravity():
                     try:
                         gravity_value = float(gravity_input)
                         if gravity_value == 0:
-                            gravity = default_gravity
-                            print(f"Гравитация установлена на дефолтное значение: {gravity}")
+                            gravity = 0.5
+                            show_message(f"Гравитация установлена на дефолтное значение: {gravity}")
                         else:
                             gravity = gravity_value
-                            print(f"Гравитация установлена на {gravity}")
+                            show_message(f"Гравитация установлена на {gravity}")
                         input_active = False
                     except ValueError:
                         gravity_input = ""
@@ -152,9 +166,24 @@ while running:
                 input_gravity()
             if event.key == pygame.K_h:
                 help_menu()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
 
-    # Удаление шаров, выходящих за границу экрана
     balls = [ball for ball in balls if 0 <= ball.x <= screen_width and 0 <= ball.y <= screen_height]
+
+    if collision_enabled:
+        for i, ball in enumerate(balls):
+            for j in range(i + 1, len(balls)):
+                other_ball = balls[j]
+                distance = math.sqrt((ball.x - other_ball.x)**2 + (ball.y - other_ball.y)**2)
+                if distance <= ball.radius + other_ball.radius:
+                    angle_between = math.atan2(other_ball.y - ball.y, other_ball.x - ball.x)
+                    overlap = ball.radius + other_ball.radius - distance
+                    ball.x -= math.cos(angle_between) * overlap * 0.5
+                    ball.y -= math.sin(angle_between) * overlap * 0.5
+                    other_ball.x += math.cos(angle_between) * overlap * 0.5
+                    other_ball.y += math.sin(angle_between) * overlap * 0.5
 
     screen.fill((0, 0, 0))
 
