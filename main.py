@@ -8,12 +8,15 @@ screen_width = 800
 screen_height = 600
 
 screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption('Шарики || ??? FPS || 0 Шаров')
+pygame.display.set_caption('BounceBalls')
 
 default_gravity = 0.5
 gravity = default_gravity
 physics_enabled = True
 collision_enabled = False
+auto_clicker_enabled = False
+dragging_enabled = False
+dragged_ball = None
 
 class ThrownBall:
     def __init__(self, x, y):
@@ -25,7 +28,10 @@ class ThrownBall:
         self.angle = random.uniform(0, math.pi * 2)
     
     def update(self):
-        if physics_enabled:
+        global dragging_enabled, dragged_ball
+        if dragging_enabled and dragged_ball == self:
+            self.x, self.y = pygame.mouse.get_pos()
+        elif physics_enabled:
             self.speed += gravity
             self.x += math.cos(self.angle) * self.speed
             self.y += math.sin(self.angle) * self.speed
@@ -42,16 +48,6 @@ class ThrownBall:
             if self.y <= top_boundary + self.radius:
                 self.y = top_boundary + self.radius
                 self.speed *= -0.8
-        
-        if collision_enabled:
-            for ball in balls:
-                if ball != self:
-                    distance = math.sqrt((self.x - ball.x)**2 + (self.y - ball.y)**2)
-                    if distance <= self.radius + ball.radius:
-                        angle_between = math.atan2(ball.y - self.y, ball.x - self.x)
-                        overlap = self.radius + ball.radius - distance
-                        self.x -= math.cos(angle_between) * overlap * 0.5
-                        self.y -= math.sin(angle_between) * overlap * 0.5
         
         if collision_enabled:
             for ball in balls:
@@ -90,7 +86,7 @@ def input_gravity():
                     try:
                         gravity_value = float(gravity_input)
                         if gravity_value == 0:
-                            gravity = 0.5
+                            gravity = default_gravity
                             show_message(f"Гравитация установлена на дефолтное значение: {gravity}")
                         else:
                             gravity = gravity_value
@@ -119,7 +115,9 @@ def help_menu():
         "Нажмите C, чтобы очистить шарики",
         "Нажмите F, чтобы включить/выключить физику",
         "Нажмите P, чтобы включить/выключить коллизии",
-        "Нажмите Q, чтобы выйти из приложения"
+        "Нажмите Q, чтобы выйти из приложения",
+        "Нажмите A, чтобы включить/выключить авто-кликер",
+        "Нажмите K, чтобы включить/выключить таскание шаров"
     ]
     help_surface = pygame.Surface((screen_width, screen_height))
     help_surface.fill((0, 0, 0))
@@ -141,36 +139,54 @@ def help_menu():
 
 running = True
 clock = pygame.time.Clock()
+crash_timeout = 0
 
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
+            if event.button == 1 and not dragging_enabled:
                 x, y = pygame.mouse.get_pos()
                 balls.append(ThrownBall(x, y))
-                pygame.display.set_caption(f'Шарики || {int(clock.get_fps())} FPS || {len(balls)} Шаров')
+                pygame.display.set_caption(f'BounceBalls || {int(clock.get_fps())} FPS || {len(balls)} Шаров')
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1 and dragging_enabled:
+                x, y = pygame.mouse.get_pos()
+                for ball in balls:
+                    if math.sqrt((ball.x - x)**2 + (ball.y - y)**2) <= ball.radius:
+                        dragged_ball = ball
+                        break
+        if event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1 and dragged_ball:
+                dragged_ball = None
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_c:
                 balls = []
                 show_message('Шарики отчищены')
-                pygame.display.set_caption(f'Шарики || {int(clock.get_fps())} FPS || {len(balls)} Шаров')
+                pygame.display.set_caption(f'BounceBalls || {int(clock.get_fps())} FPS || {len(balls)} Шаров')
             if event.key == pygame.K_f:
                 physics_enabled = not physics_enabled
                 show_message('Физика включена' if physics_enabled else 'Физика отключена')
             if event.key == pygame.K_p:
                 collision_enabled = not collision_enabled
                 show_message('Коллизия включена' if collision_enabled else 'Коллизия отключена')
+            if event.key == pygame.K_a:
+                auto_clicker_enabled = not auto_clicker_enabled
+                show_message('Авто-кликер включен' if auto_clicker_enabled else 'Авто-кликер отключен')
+            if event.key == pygame.K_k:
+                dragging_enabled = not dragging_enabled
+                show_message('Таскание шаров включено' if dragging_enabled else 'Таскание шаров отключено')
             if event.key == pygame.K_g:
                 input_gravity()
             if event.key == pygame.K_h:
                 help_menu()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q:
-                    running = False
 
     balls = [ball for ball in balls if 0 <= ball.x <= screen_width and 0 <= ball.y <= screen_height]
+
+    if auto_clicker_enabled:
+        x, y = pygame.mouse.get_pos()
+        balls.append(ThrownBall(x, y))
 
     if collision_enabled:
         for i, ball in enumerate(balls):
@@ -196,7 +212,17 @@ while running:
         ball.draw()
 
     pygame.display.flip()
-    pygame.display.set_caption(f'Шарики || {int(clock.get_fps())} FPS || {len(balls)} Шаров')
+
+    if clock.get_fps() == 0:
+        crash_timeout += 1
+        if crash_timeout >= 600:  # 600 frames at 60 FPS is 10 seconds
+            balls = []
+            show_message('Игра зависла\nGame has been crashed')
+            crash_timeout = 0
+    else:
+        crash_timeout = 0
+
+    pygame.display.set_caption(f'BounceBalls || {int(clock.get_fps())} FPS || {len(balls)} Шаров')
     clock.tick(60)
 
 pygame.quit()
